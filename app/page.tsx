@@ -1,68 +1,542 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+import { useEffect, useState } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ThemeToggle } from '@/components/theme-toggle';
+
+type Gender = 'BOY' | 'GIRL';
+
+interface GenderBet {
+  gender: Gender;
+  amount: number;
+}
+
+interface DateBet {
+  date: string; // YYYY-MM-DD
+  amount: number;
+}
+
+interface GenderSummary {
+  boyCount: number;
+  boyTotal: number;
+  girlCount: number;
+  girlTotal: number;
+  totalPot: number;
+}
+
+interface DateSummary {
+  dates: { date: string; count: number; total: number }[];
+  totalPot: number;
+}
+
+interface Result {
+  id: string;
+  winningGender: Gender | null;
+  birthDate: string | null; // YYYY-MM-DD
+  isRevealed: boolean;
+  bettingClosed: boolean;
+}
+
+export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  // Gender bet states
+  const [myGenderBet, setMyGenderBet] = useState<GenderBet | null>(null);
+  const [genderSummary, setGenderSummary] = useState<GenderSummary | null>(null);
+  const [genderPotentialWinnings, setGenderPotentialWinnings] = useState<number | null>(null);
+  const [gender, setGender] = useState<Gender>('BOY');
+  const [genderAmount, setGenderAmount] = useState<number>(10);
+  const [genderError, setGenderError] = useState('');
+  const [genderLoading, setGenderLoading] = useState(false);
+
+  // Date bet states
+  const [myDateBet, setMyDateBet] = useState<DateBet | null>(null);
+  const [dateSummary, setDateSummary] = useState<DateSummary | null>(null);
+  const [datePotentialWinnings, setDatePotentialWinnings] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [dateAmount, setDateAmount] = useState<number>(10);
+  const [dateError, setDateError] = useState('');
+  const [dateLoading, setDateLoading] = useState(false);
+
+  const [result, setResult] = useState<Result | null>(null);
+  const [fetchLoading, setFetchLoading] = useState(true);
+
+  // Generate allowed dates (March 18 - April 14 of current year)
+  const currentYear = new Date().getFullYear();
+  const startDate = new Date(currentYear, 2, 18); // March 18
+  const endDate = new Date(currentYear, 3, 14);   // April 14
+  const allowedDates: string[] = [];
+  let tempDate = new Date(startDate);
+  while (tempDate <= endDate) {
+    allowedDates.push(tempDate.toISOString().split('T')[0]);
+    tempDate.setDate(tempDate.getDate() + 1);
+  }
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      const fetchData = async () => {
+        try {
+          const [
+            genderBetRes,
+            genderSummaryRes,
+            genderWinningsRes,
+            dateBetRes,
+            dateSummaryRes,
+            dateWinningsRes,
+            resultRes,
+          ] = await Promise.all([
+            fetch('/api/bets/mine'),
+            fetch('/api/bets/summary'),
+            fetch('/api/bets/potential-winnings'),
+            fetch('/api/date-bets/mine'),
+            fetch('/api/date-bets/summary'),
+            fetch('/api/date-bets/potential-winnings'),
+            fetch('/api/result'),
+          ]);
+
+          // Gender bet
+          if (genderBetRes.ok) {
+            const data = await genderBetRes.json();
+            setMyGenderBet(data.bet);
+          }
+          if (genderSummaryRes.ok) {
+            const data = await genderSummaryRes.json();
+            setGenderSummary(data.summary);
+          }
+          if (genderWinningsRes.ok) {
+            const data = await genderWinningsRes.json();
+            setGenderPotentialWinnings(data.potentialWinnings);
+          }
+
+          // Date bet
+          if (dateBetRes.ok) {
+            const data = await dateBetRes.json();
+            const bet = data.bet;
+            if (bet?.date) {
+              const shortDate = bet.date.split('T')[0]; // normalize to YYYY-MM-DD
+              setMyDateBet({ ...bet, date: shortDate });
+              setSelectedDate(shortDate);
+            } else {
+              setMyDateBet(null);
+              if (allowedDates.length > 0) setSelectedDate(allowedDates[0]);
+            }
+          } else if (allowedDates.length > 0) {
+            setSelectedDate(allowedDates[0]);
+          }
+          if (dateSummaryRes.ok) {
+            const data = await dateSummaryRes.json();
+            setDateSummary(data.summary);
+          }
+          if (dateWinningsRes.ok) {
+            const data = await dateWinningsRes.json();
+            setDatePotentialWinnings(data.potentialWinnings);
+          }
+
+          // Result
+          if (resultRes.ok) {
+            const data = await resultRes.json();
+            setResult(data.result);
+          }
+        } catch (err) {
+          console.error('Errore nel recupero dei dati:', err);
+        } finally {
+          setFetchLoading(false);
+        }
+      };
+
+      fetchData();
+    } else if (status === 'unauthenticated') {
+      setFetchLoading(false);
+      if (allowedDates.length > 0 && !selectedDate) {
+        setSelectedDate(allowedDates[0]);
+      }
+    }
+  }, [status]);
+
+  // Gender bet submission
+  const handleGenderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGenderError('');
+    setGenderLoading(true);
+    try {
+      const res = await fetch('/api/bets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gender, amount: genderAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGenderError(data.error || 'Errore nel salvataggio della scommessa');
+        return;
+      }
+      setMyGenderBet(data.bet);
+
+      // Refresh gender summary and winnings
+      const [summaryRes, winningsRes] = await Promise.all([
+        fetch('/api/bets/summary'),
+        fetch('/api/bets/potential-winnings'),
+      ]);
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        setGenderSummary(summaryData.summary);
+      }
+      if (winningsRes.ok) {
+        const winningsData = await winningsRes.json();
+        setGenderPotentialWinnings(winningsData.potentialWinnings);
+      }
+    } catch (err) {
+      setGenderError('Qualcosa è andato storto. Riprova.');
+      console.error(err);
+    } finally {
+      setGenderLoading(false);
+    }
+  };
+
+  // Date bet submission
+  const handleDateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDateError('');
+    setDateLoading(true);
+    try {
+      const res = await fetch('/api/date-bets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, amount: dateAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDateError(data.error || 'Errore nel salvataggio della scommessa');
+        return;
+      }
+      const bet = data.bet;
+      const shortDate = bet.date.split('T')[0];
+      setMyDateBet({ ...bet, date: shortDate });
+      setSelectedDate(shortDate);
+
+      // Refresh date summary and winnings
+      const [summaryRes, winningsRes] = await Promise.all([
+        fetch('/api/date-bets/summary'),
+        fetch('/api/date-bets/potential-winnings'),
+      ]);
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        setDateSummary(summaryData.summary);
+      }
+      if (winningsRes.ok) {
+        const winningsData = await winningsRes.json();
+        setDatePotentialWinnings(winningsData.potentialWinnings);
+      }
+    } catch (err) {
+      setDateError('Qualcosa è andato storto. Riprova.');
+      console.error(err);
+    } finally {
+      setDateLoading(false);
+    }
+  };
+
+  if (status === 'loading' || fetchLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p>Caricamento...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background">
+        <nav className="border-b border-border">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex justify-between items-center">
+            <h1 className="text-xl font-semibold text-foreground">
+              Gender Reveal Bet
+            </h1>
+            <div className="flex items-center gap-2">
+              <Link href="/login" className={buttonVariants({ variant: 'default', size: 'sm' })}>
+                Accedi
+              </Link>
+              <Link href="/register" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                Registrati
+              </Link>
+              <ThemeToggle />
+            </div>
+          </div>
+        </nav>
+        <main className="mx-auto max-w-4xl px-4 py-8 text-center">
+          <h2 className="text-2xl font-bold">Benvenuti alle scommesse sul genere e sulla data di nascita!</h2>
+          <p className="mt-4 text-muted-foreground">
+            Accedi o registrati per piazzare la tua scommessa.
           </p>
+        </main>
+      </div>
+    );
+  }
+
+  const bettingClosed = result?.bettingClosed ?? false;
+  const isRevealed = result?.isRevealed ?? false;
+
+  // Compute actual winnings for gender
+  let genderActualWinnings: number | null = null;
+  if (isRevealed && myGenderBet && result?.winningGender) {
+    const totalOnWinningGender =
+      result.winningGender === 'BOY' ? genderSummary?.boyTotal ?? 0 : genderSummary?.girlTotal ?? 0;
+    if (myGenderBet.gender === result.winningGender && totalOnWinningGender > 0) {
+      genderActualWinnings = (myGenderBet.amount / totalOnWinningGender) * (genderSummary?.totalPot ?? 0);
+    } else {
+      genderActualWinnings = 0;
+    }
+  }
+
+  // Compute actual winnings for date
+  let dateActualWinnings: number | null = null;
+  if (isRevealed && myDateBet && result?.birthDate) {
+    const totalOnDate = dateSummary?.dates.find(d => d.date === result.birthDate)?.total ?? 0;
+    if (myDateBet.date === result.birthDate && totalOnDate > 0) {
+      dateActualWinnings = (myDateBet.amount / totalOnDate) * (dateSummary?.totalPot ?? 0);
+    } else {
+      dateActualWinnings = 0;
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <nav className="border-b border-border">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex justify-between items-center">
+          <h1 className="text-xl font-semibold text-foreground">Gender Reveal Bet</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Benvenuto, <strong>{session.user.username}</strong>!
+            </span>
+            {session.user.isAdmin && (
+              <Link href="/admin" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+                Admin
+              </Link>
+            )}
+            <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: '/' })}>
+              Esci
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </nav>
+
+      <main className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+        {/* Revealed Result Banner */}
+        {isRevealed && (result?.winningGender || result?.birthDate) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Risultato Rivelato</CardTitle>
+              <CardDescription>
+                {result.winningGender && `Il bambino è un ${result.winningGender === 'BOY' ? 'Maschio 👦' : 'Femmina 👧'}.`}
+                {result.birthDate && ` Nato il ${new Date(result.birthDate).toLocaleDateString('it-IT')}.`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Gender winnings result */}
+              {myGenderBet && (
+                <p className={genderActualWinnings !== null && genderActualWinnings > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
+                  {genderActualWinnings !== null && genderActualWinnings > 0
+                    ? `Congratulazioni! Hai vinto ${genderActualWinnings.toFixed(2)} punti per la scommessa sul genere.`
+                    : 'Mi dispiace, non hai vinto la scommessa sul genere.'}
+                </p>
+              )}
+              {/* Date winnings result */}
+              {myDateBet && (
+                <p className={dateActualWinnings !== null && dateActualWinnings > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
+                  {dateActualWinnings !== null && dateActualWinnings > 0
+                    ? `Congratulazioni! Hai vinto ${dateActualWinnings.toFixed(2)} punti per la scommessa sulla data.`
+                    : 'Mi dispiace, non hai vinto la scommessa sulla data.'}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Gender Bet Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Scommessa sul Genere</CardTitle>
+            <CardDescription>
+              {bettingClosed ? (
+                'Le scommesse sono chiuse.'
+              ) : myGenderBet ? (
+                <>Hai scommesso <strong>{myGenderBet.amount}</strong> su <strong>{myGenderBet.gender === 'BOY' ? 'Maschio' : 'Femmina'}</strong>.</>
+              ) : (
+                'Non hai ancora piazzato una scommessa sul genere.'
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!isRevealed && !bettingClosed && genderPotentialWinnings !== null && myGenderBet && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Se <strong>{myGenderBet.gender === 'BOY' ? 'Maschio' : 'Femmina'}</strong> vince, riceverai:{' '}
+                <strong>{genderPotentialWinnings.toFixed(2)}</strong> punti.
+              </p>
+            )}
+            <form onSubmit={handleGenderSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Genere</Label>
+                <Select value={gender} onValueChange={(value) => setGender(value as Gender)} disabled={bettingClosed}>
+                  <SelectTrigger className="w-full">
+                    <span>{gender === 'BOY' ? 'Maschio 👦' : 'Femmina 👧'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BOY">Maschio 👦</SelectItem>
+                    <SelectItem value="GIRL">Femmina 👧</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="genderAmount">Importo (punti)</Label>
+                <Input
+                  id="genderAmount"
+                  type="number"
+                  value={genderAmount}
+                  onChange={(e) => setGenderAmount(Number(e.target.value))}
+                  min={0}
+                  disabled={bettingClosed}
+                />
+              </div>
+              {genderError && <p className="text-sm text-destructive">{genderError}</p>}
+              <Button type="submit" disabled={genderLoading || bettingClosed}>
+                {genderLoading ? 'Salvataggio...' : myGenderBet ? 'Aggiorna Scommessa' : 'Piazza Scommessa'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Date Bet Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Scommessa sulla Data di Nascita</CardTitle>
+            <CardDescription>
+              {bettingClosed ? (
+                'Le scommesse sono chiuse.'
+              ) : myDateBet ? (
+                  <>Hai scommesso <strong>{myDateBet.amount}</strong> sul giorno <strong>{new Date(myDateBet.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</strong>.</>
+                ) : (
+                'Non hai ancora piazzato una scommessa sulla data.'
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!isRevealed && !bettingClosed && datePotentialWinnings !== null && myDateBet && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Se il <strong>{new Date(myDateBet.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</strong> vince, riceverai:{' '}
+                <strong>{datePotentialWinnings.toFixed(2)}</strong> punti.
+              </p>
+            )}
+            <form onSubmit={handleDateSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Data di nascita (tra il 18 marzo e il 14 aprile)</Label>
+                <Select value={selectedDate} onValueChange={setSelectedDate} disabled={bettingClosed}>
+                  <SelectTrigger className="w-full">
+                    {selectedDate ? (
+                      <span>{new Date(selectedDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Seleziona una data</span>
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allowedDates.map((date) => (
+                      <SelectItem key={date} value={date}>
+                        {new Date(date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateAmount">Importo (punti)</Label>
+                <Input
+                  id="dateAmount"
+                  type="number"
+                  value={dateAmount}
+                  onChange={(e) => setDateAmount(Number(e.target.value))}
+                  min={0}
+                  disabled={bettingClosed}
+                />
+              </div>
+              {dateError && <p className="text-sm text-destructive">{dateError}</p>}
+              <Button type="submit" disabled={dateLoading || bettingClosed}>
+                {dateLoading ? 'Salvataggio...' : myDateBet ? 'Aggiorna Scommessa' : 'Piazza Scommessa'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Gender Summary */}
+        {genderSummary && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Riepilogo Scommesse sul Genere</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg bg-blue-100 dark:bg-blue-900/30 p-4">
+                  <p className="font-semibold">Maschio 👦</p>
+                  <p className="text-sm">Scommesse: {genderSummary.boyCount}</p>
+                  <p className="text-sm">Totale: {genderSummary.boyTotal}</p>
+                </div>
+                <div className="rounded-lg bg-pink-100 dark:bg-pink-900/30 p-4">
+                  <p className="font-semibold">Femmina 👧</p>
+                  <p className="text-sm">Scommesse: {genderSummary.girlCount}</p>
+                  <p className="text-sm">Totale: {genderSummary.girlTotal}</p>
+                </div>
+              </div>
+              <p className="mt-4 text-foreground">
+                Montepremi totale: <strong>{genderSummary.totalPot}</strong>
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Date Summary */}
+        {dateSummary && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Riepilogo Scommesse sulla Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {dateSummary.dates.length > 0 ? (
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Data</th>
+                        <th className="text-left py-2">Scommesse</th>
+                        <th className="text-left py-2">Totale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateSummary.dates
+                        .sort((a, b) => a.date.localeCompare(b.date))
+                        .map((item) => (
+                          <tr key={item.date} className="border-b last:border-0">
+                            <td className="py-2">{new Date(item.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</td>
+                            <td className="py-2">{item.count}</td>
+                            <td className="py-2">{item.total}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Nessuna scommessa sulla data ancora.</p>
+              )}
+              <p className="mt-4 text-foreground">
+                Montepremi totale data: <strong>{dateSummary.totalPot}</strong>
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

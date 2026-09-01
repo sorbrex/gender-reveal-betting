@@ -21,6 +21,7 @@ ENV NODE_ENV=production
 
 # Install Prisma CLI for migrations
 RUN npm install -g prisma@7.10.0
+RUN npm install dotenv@16.4.5
 
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./

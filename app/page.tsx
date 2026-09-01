@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SelectRootChangeEventDetails } from '@base-ui/react/select';
 
 type Gender = 'BOY' | 'GIRL';
 
@@ -436,7 +437,13 @@ export default function HomePage() {
             <form onSubmit={handleDateSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Data di nascita (tra il 18 marzo e il 14 aprile)</Label>
-                <Select value={selectedDate} onValueChange={setSelectedDate} disabled={bettingClosed}>
+                <Select
+                  value={selectedDate}
+                  onValueChange={(value: string | null, _eventDetails: SelectRootChangeEventDetails) => {
+                    if (value) setSelectedDate(value);
+                  }}
+                  disabled={bettingClosed}
+                >
                   <SelectTrigger className="w-full">
                     {selectedDate ? (
                       <span>{new Date(selectedDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</span>

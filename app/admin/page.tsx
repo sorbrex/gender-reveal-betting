@@ -266,7 +266,12 @@ export default function AdminPage() {
               </div>
               <div className="space-y-2">
                 <Label>Data di nascita</Label>
-                <Select value={birthDate} onValueChange={setBirthDate}>
+                <Select
+                  value={birthDate}
+                  onValueChange={(value: string | null, _eventDetails: SelectRootChangeEventDetails) => {
+                    if (value) setBirthDate(value);
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     {birthDate ? (
                       <span>{new Date(birthDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</span>

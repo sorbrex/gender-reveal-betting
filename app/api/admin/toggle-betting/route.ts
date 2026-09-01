@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin';
 import { prisma } from '@/lib/prisma';
-import { forbidden } from '@/lib/api-utils';
+import { forbidden, serverError } from '@/lib/api-utils';
 
 export async function POST(request: Request) {
   if (!(await isAdmin())) {

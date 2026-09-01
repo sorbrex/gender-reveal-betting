@@ -1,5 +1,5 @@
 # ---- Base Node ----
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 COPY package*.json ./
 
@@ -15,7 +15,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # ---- Production ----
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -29,6 +29,7 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/prisma.config.ts ./prisma.config.ts   # <-- add this
 
 # Copy entrypoint script
 COPY entrypoint.sh ./entrypoint.sh

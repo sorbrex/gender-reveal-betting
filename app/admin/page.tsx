@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SelectRootChangeEventDetails } from '@base-ui/react/select';
 
 type Gender = 'BOY' | 'GIRL';
 

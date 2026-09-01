@@ -31,6 +31,10 @@ jobs:
 
       - name: Generate Prisma Client
         run: npx prisma generate
+        # Prisma 7 validates DATABASE_URL during generation without connecting.
+        # The production value is supplied by Dockge when the container starts.
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build?schema=public
 
       - name: Build Next.js app
         run: npm run build

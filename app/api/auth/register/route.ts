@@ -32,12 +32,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const [passwordHash, userCount] = await Promise.all([
+      bcrypt.hash(password, 10),
+      prisma.user.count(),
+    ]);
 
     const user = await prisma.user.create({
       data: {
         username: username.trim(),
         passwordHash,
+        // A fresh installation needs one account that can control the game.
+        isAdmin: userCount === 0,
       },
     });
 

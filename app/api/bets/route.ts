@@ -9,6 +9,7 @@ import {
   isValidGender,
   isValidAmount,
 } from '@/lib/api-utils';
+import { isBettingOpen } from '@/lib/betting-rules';
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -26,19 +27,23 @@ export async function POST(request: Request) {
     }
 
     if (!isValidAmount(amount)) {
-      return badRequest('Amount must be a non-negative number');
+      return badRequest('Amount must be a non-negative integer');
+    }
+
+    if (!(await isBettingOpen())) {
+      return badRequest('Le scommesse sono chiuse');
     }
 
     const bet = await prisma.bet.upsert({
       where: { userId: session.user.id },
       update: {
         gender,
-        amount: Number(amount),
+        amount,
       },
       create: {
         userId: session.user.id,
         gender,
-        amount: Number(amount),
+        amount,
       },
     });
 

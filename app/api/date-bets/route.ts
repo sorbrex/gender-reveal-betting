@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { badRequest, unauthorized, serverError, isValidAmount } from '@/lib/api-utils';
+import { isAllowedBetDate, isBettingOpen, parseDateOnly } from '@/lib/betting-rules';
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -15,41 +16,33 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { date, amount } = body;
 
-    // Validate date: string YYYY-MM-DD and within allowed range
-    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const parsedDate = parseDateOnly(date);
+    if (!parsedDate) {
       return badRequest('Data non valida');
     }
 
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return badRequest('Data non valida');
-    }
-
-    // Check month/day within allowed window (March 18 - April 14)
-    const month = parsedDate.getUTCMonth() + 1; // getUTCMonth is 0-indexed
-    const day = parsedDate.getUTCDate();
-    const isValidMonthDay =
-      (month === 3 && day >= 18) || // March 18-31
-      (month === 4 && day <= 14);   // April 1-14
-
-    if (!isValidMonthDay) {
+    if (!isAllowedBetDate(parsedDate)) {
       return badRequest('La data deve essere tra il 18 marzo e il 14 aprile');
     }
 
     if (!isValidAmount(amount)) {
-      return badRequest('Importo non valido');
+      return badRequest('Importo non valido: usa un numero intero non negativo');
+    }
+
+    if (!(await isBettingOpen())) {
+      return badRequest('Le scommesse sono chiuse');
     }
 
     const bet = await prisma.dateBet.upsert({
       where: { userId: session.user.id },
       update: {
         date: parsedDate,
-        amount: Number(amount),
+        amount,
       },
       create: {
         userId: session.user.id,
         date: parsedDate,
-        amount: Number(amount),
+        amount,
       },
     });
 

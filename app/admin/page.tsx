@@ -15,12 +15,11 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { SelectRootChangeEventDetails } from '@base-ui/react/select';
+import { getAllowedBetDates } from '@/lib/date-utils';
 
 type Gender = 'BOY' | 'GIRL';
 
@@ -59,6 +58,8 @@ interface Result {
   bettingClosed: boolean;
 }
 
+const allowedDates = getAllowedBetDates();
+
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -74,17 +75,6 @@ export default function AdminPage() {
   const [loadingResult, setLoadingResult] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Allowed dates
-  const currentYear = new Date().getFullYear();
-  const startDate = new Date(currentYear, 2, 18);
-  const endDate = new Date(currentYear, 3, 14);
-  const allowedDates: string[] = [];
-  let tempDate = new Date(startDate);
-  while (tempDate <= endDate) {
-    allowedDates.push(tempDate.toISOString().split('T')[0]);
-    tempDate.setDate(tempDate.getDate() + 1);
-  }
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -112,7 +102,7 @@ export default function AdminPage() {
           }
           if (dateBetsRes.ok) {
             const data = await dateBetsRes.json();
-            const normalized = data.bets.map((bet: any) => ({
+            const normalized = data.bets.map((bet: DateBetWithUser) => ({
               ...bet,
               date: bet.date.split('T')[0],
             }));
@@ -269,7 +259,7 @@ export default function AdminPage() {
                 <Label>Data di nascita</Label>
                 <Select
                   value={birthDate}
-                  onValueChange={(value: string | null, _eventDetails: SelectRootChangeEventDetails) => {
+                  onValueChange={(value) => {
                     if (value) setBirthDate(value);
                   }}
                 >

@@ -20,19 +20,18 @@ export function serverError(message = 'Internal server error') {
   return NextResponse.json({ error: message }, { status: 500 });
 }
 
-export function isValidGender(gender: any): gender is 'BOY' | 'GIRL' {
+export function isValidGender(gender: unknown): gender is 'BOY' | 'GIRL' {
   return gender === 'BOY' || gender === 'GIRL';
 }
 
-export function isValidAmount(amount: any): amount is number {
-  const num = Number(amount);
-  return !isNaN(num) && num >= 0 && Number.isFinite(num);
+export function isValidAmount(amount: unknown): amount is number {
+  return typeof amount === 'number' && Number.isInteger(amount) && amount >= 0;
 }
 
-export function isValidUsername(username: any): username is string {
+export function isValidUsername(username: unknown): username is string {
   return typeof username === 'string' && username.trim().length >= 3;
 }
 
-export function isValidPassword(password: any): password is string {
+export function isValidPassword(password: unknown): password is string {
   return typeof password === 'string' && password.length >= 6;
 }

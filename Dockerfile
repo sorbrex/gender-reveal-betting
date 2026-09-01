@@ -11,7 +11,9 @@ RUN npm ci
 FROM base AS build
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
+# Prisma 7 validates the datasource URL while generating the client, but does
+# not connect to it. The real DATABASE_URL is supplied by Dockge at runtime.
+RUN DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public" npx prisma generate
 RUN npm run build
 
 # ---- Production ----

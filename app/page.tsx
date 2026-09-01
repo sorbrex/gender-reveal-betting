@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { SelectRootChangeEventDetails } from '@base-ui/react/select';
+import { getAllowedBetDates } from '@/lib/date-utils';
 
 type Gender = 'BOY' | 'GIRL';
 
@@ -45,9 +44,10 @@ interface Result {
   bettingClosed: boolean;
 }
 
+const allowedDates = getAllowedBetDates();
+
 export default function HomePage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
 
   // Gender bet states
   const [myGenderBet, setMyGenderBet] = useState<GenderBet | null>(null);
@@ -62,24 +62,13 @@ export default function HomePage() {
   const [myDateBet, setMyDateBet] = useState<DateBet | null>(null);
   const [dateSummary, setDateSummary] = useState<DateSummary | null>(null);
   const [datePotentialWinnings, setDatePotentialWinnings] = useState<number | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState(() => allowedDates[0] ?? '');
   const [dateAmount, setDateAmount] = useState<number>(10);
   const [dateError, setDateError] = useState('');
   const [dateLoading, setDateLoading] = useState(false);
 
   const [result, setResult] = useState<Result | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
-
-  // Generate allowed dates (March 18 - April 14 of current year)
-  const currentYear = new Date().getFullYear();
-  const startDate = new Date(currentYear, 2, 18); // March 18
-  const endDate = new Date(currentYear, 3, 14);   // April 14
-  const allowedDates: string[] = [];
-  let tempDate = new Date(startDate);
-  while (tempDate <= endDate) {
-    allowedDates.push(tempDate.toISOString().split('T')[0]);
-    tempDate.setDate(tempDate.getDate() + 1);
-  }
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -127,10 +116,7 @@ export default function HomePage() {
               setSelectedDate(shortDate);
             } else {
               setMyDateBet(null);
-              if (allowedDates.length > 0) setSelectedDate(allowedDates[0]);
             }
-          } else if (allowedDates.length > 0) {
-            setSelectedDate(allowedDates[0]);
           }
           if (dateSummaryRes.ok) {
             const data = await dateSummaryRes.json();
@@ -154,11 +140,6 @@ export default function HomePage() {
       };
 
       fetchData();
-    } else if (status === 'unauthenticated') {
-      setFetchLoading(false);
-      if (allowedDates.length > 0 && !selectedDate) {
-        setSelectedDate(allowedDates[0]);
-      }
     }
   }, [status]);
 
@@ -243,7 +224,7 @@ export default function HomePage() {
     }
   };
 
-  if (status === 'loading' || fetchLoading) {
+  if (status === 'loading' || (status === 'authenticated' && fetchLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <p>Caricamento...</p>
@@ -439,7 +420,7 @@ export default function HomePage() {
                 <Label>Data di nascita (tra il 18 marzo e il 14 aprile)</Label>
                 <Select
                   value={selectedDate}
-                  onValueChange={(value: string | null, _eventDetails: SelectRootChangeEventDetails) => {
+                  onValueChange={(value) => {
                     if (value) setSelectedDate(value);
                   }}
                   disabled={bettingClosed}
